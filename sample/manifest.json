@@ -1,0 +1,41 @@
+{
+  "_comment": "Образец пакета shader-package/1: два пасса, картинка, пропуск, область записи, время, указатель, предупреждение, набор. Правила — docs/format.md репо shader_package.",
+  "format": "shader-package/1",
+  "id": "blur_spot",
+  "name": "Blurred spot",
+  "knobs": "knobs.json",
+  "style": "shadertoy",
+  "inputs": ["iResolution", "iTime"],
+  "common": "common.glsl",
+  "textures": {
+    "photo": {"file": "assets/checker.png", "mipmaps": true, "wrap": ["clamp", "clamp"]}
+  },
+  "buffers": {
+    "A": {"format": "rgba16f", "clear": [0, 0, 0, 1],
+          "live": ["iResolution.x / float(DOWNSCALE) + 1.0",
+                   "iResolution.y / float(DOWNSCALE) + 1.0"]}
+  },
+  "passes": [
+    {"name": "blur", "code": "blur.glsl", "output": "A", "channels": ["photo"],
+     "skip": [{"when": "BLUR == 0.0", "why": "image reads buffer A only when BLUR != 0.0"}]},
+    {"name": "image", "code": "image.glsl", "output": "screen", "channels": ["photo", "A"]}
+  ],
+  "time": {
+    "when": "PULSE_MODE != 0",
+    "help": "Time enters the frame only through the pulse of the radius",
+    "help_ru": "Время входит в кадр только пульсом радиуса"
+  },
+  "pointer": [{"knob": "SPOT"}],
+  "let": {
+    "nx": "max(floor(COLS + 0.5), 1.0)",
+    "ny": "max(floor(ROWS + 0.5), 1.0)"
+  },
+  "warnings": [
+    {"id": "too_many_dots", "when": "nx * ny > float(MAX_DOTS)",
+     "short": "dots {nx}×{ny} = {nx * ny} > MAX_DOTS {MAX_DOTS}",
+     "short_ru": "точек {nx}×{ny} = {nx * ny} > MAX_DOTS {MAX_DOTS}",
+     "text": "The {nx}×{ny} grid needs {nx * ny} dots, but the loop draws at most {MAX_DOTS}: the last {nx * ny - float(MAX_DOTS)} are missing. Raise MAX_DOTS or lower Columns·Rows.",
+     "text_ru": "Решётке {nx}×{ny} нужно {nx * ny} точек, а цикл рисует не больше {MAX_DOTS}: последних {nx * ny - float(MAX_DOTS)} нет. Поднимите MAX_DOTS или уменьшите Столбцы·Строки."}
+  ],
+  "presets": "presets"
+}

@@ -1,0 +1,2 @@
+# Пульс и размытие посильнее — образец набора: строка значений, docs/format.md §7.
+PULSE_MODE=1 BLUR=3 'SPOT=vec2(0.35,0.6)' SPIN_deg=30 ITIME=1.25 @scale=1
