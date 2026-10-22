@@ -1,5 +1,5 @@
 {
-  "_comment": "Образец пакета shader-package/1: два пасса, картинка, пропуск, область записи, время, указатель, предупреждение, набор. Правила — docs/format.md репо shader_package.",
+  "_comment": "Образец пакета shader-package/1: два пасса, картинка, пропуск, область записи, время, указатель, предупреждение, наборы — и в подпапке; в knobs.json — все типы ручек, все ui и все виды гейтов. Правила — docs/format.md репо shader_package.",
   "format": "shader-package/1",
   "id": "blur_spot",
   "name": "Blurred spot",

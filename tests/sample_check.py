@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""ПРАВДА ОБЪЯВЛЕНИЙ ОБРАЗЦА — sample/manifest.json против его вкладок, 7 блоков.
+"""ПРАВДА ОБЪЯВЛЕНИЙ ОБРАЗЦА — sample/manifest.json против его вкладок, 8 блоков.
 
 Проверка пакета судит форму, правду объявлений доказывает судья проекта (docs/format.md §4). У
 образца проект — этот репо, и судья — этот стенд: хосты гоняют на образце свои пропуск, область
@@ -12,9 +12,14 @@
   4 предупреждение ↔ цикл точек: let равны формулам вкладки, и условие истинно ровно тогда, когда
     цикл обрезает решётку;
   5 указатель ↔ код: ручка указателя входит в кадр только долей кадра от левого нижнего угла;
-  6 вкладки собираются glslangValidator при всех значениях гейтов-списков и краях гейта-числа
-    (нужен GLSLANG=, без него блок говорит, что не работал);
-  7 отрицательные контроли: испорченное объявление или вкладка ловится своим блоком.
+  6 вкладки собираются glslangValidator при всех значениях гейтов-списков и краях гейтов-чисел,
+    гейт — литералом типа своего #define (§2.1: у MARGIN край 0 — «0.0»); нужен GLSLANG=, без
+    него блок говорит, что не работал;
+  7 покрытие: в образце есть каждый тип ручки, каждое ui, каждый вид гейта и оба типа
+    гейта-числа, подгруппа, страницы, особые точки, период, перевод, каждое объявление описания,
+    набор в подпапке и картинка, у которой вкладка называет уровень мип-цепочки, — хост, прошедший
+    свои стенды на образце, исполнил каждое поле правил;
+  8 отрицательные контроли: испорченное объявление или вкладка ловится своим блоком.
 
 Запуск из корня репо:  python tests/sample_check.py      (код 1 — нарушение)
 """
@@ -179,7 +184,9 @@ def compile_all(man, kj, src):
         common = src['common.glsl']
         for g, val in zip(lists + nums, combo):
             m = knobs_rules.define_re(g['name']).search(common)
-            common = common[:m.start(1)] + str(val) + common[m.end(1):]
+            lit = (repr(float(val)) if knobs_rules.gate_type(g, src['common.glsl']) == 'float'
+                   else str(int(val)))
+            common = common[:m.start(1)] + lit + common[m.end(1):]
         for p in man['passes']:
             text = pre + common + src[p['code']] + \
                 '\nvoid main() { mainImage(shaderOut, gl_FragCoord.xy); }\n'
@@ -194,9 +201,46 @@ def compile_all(man, kj, src):
     return out
 
 
+def coverage(man, kj, src):
+    out = []
+    ks, gs = kj['knobs'], kj['gates']
+    nums = [g for g in gs if g.get('kind') == 'number']
+    has = {
+        'тип ручки': ({k['type'] for k in ks}, set(knobs_rules.TYPES)),
+        'ui': ({k['ui'] for k in ks if 'ui' in k}, set(knobs_rules.UI_TYPE)),
+        'вид гейта': ({g.get('kind', 'options') for g in gs}, {'options', 'number', 'text'}),
+        'тип гейта-числа': ({knobs_rules.gate_type(g, src['common.glsl']) for g in nums},
+                            {'int', 'float'}),
+        'объявление': ({k for k in ('time', 'pointer', 'let', 'warnings', 'presets') if k in man}
+                       | {k for p in man['passes'] for k in ('skip',) if k in p}
+                       | {k for b in man.get('buffers', {}).values() for k in ('live',) if k in b},
+                       {'skip', 'live', 'time', 'pointer', 'let', 'warnings', 'presets'}),
+        'поле записи': ({f for e in ks + gs for f in ('sub', 'notable', 'periodic') if f in e}
+                        | {'pages'} & set(kj) | {'languages'} & set(kj),
+                        {'sub', 'notable', 'periodic', 'pages', 'languages'}),
+    }
+    for what, (got, want) in has.items():
+        if want - got:
+            out.append('%s: в образце нет %s' % (what, ', '.join(sorted(want - got))))
+    deep = [d for d, _s, fs in os.walk(os.path.join(SAMPLE, man.get('presets', 'presets')))
+            if fs and os.path.relpath(d, SAMPLE).count(os.sep) >= 1]
+    if not deep:
+        out.append('наборы: в образце нет набора в подпапке')
+    tex = man.get('textures', {})
+    lod = [p['name'] for p in man['passes'] for i, c in enumerate(p.get('channels', []))
+           if tex.get(c, {}).get('mipmaps') and re.search(
+               r'\btexture(?:Lod|Grad)\s*\(\s*iChannel%d\b' % i,
+               check.strip_comments(src[p['code']]))]
+    if not lod:
+        out.append('картинки: ни одна вкладка не называет уровень мип-цепочки — хост, забывший '
+                   'mipmaps, прошёл бы стенды на образце')
+    return out
+
+
 BLOCKS = [('пропуск blur ↔ image', skip_vs_image), ('область записи ↔ discard', live_vs_discard),
           ('время ↔ стражи #if', time_vs_guards), ('предупреждение ↔ цикл точек', warning_vs_loop),
-          ('указатель ↔ код', pointer_vs_code), ('сборка glslang', compile_all)]
+          ('указатель ↔ код', pointer_vs_code), ('сборка glslang', compile_all),
+          ('покрытие правил', coverage)]
 
 
 def _m(fn):
@@ -220,6 +264,13 @@ CONTROLS = [
     ('int вместо float во вкладке', 5, _m(lambda m, s: s.update(
         {'blur.glsl': s['blur.glsl'].replace('float DS = float(DOWNSCALE);',
                                              'float DS = DOWNSCALE;')}))),
+    ('гейт MARGIN целым литералом', 5, _m(lambda m, s: s.update(
+        {'common.glsl': s['common.glsl'].replace('#define MARGIN     0.02',
+                                                 '#define MARGIN     1')}))),
+    ('описание без указателя', 6, _m(lambda m, s: m.pop('pointer'))),
+    ('уровень мип-цепочки не назван', 6, _m(lambda m, s: s.update(
+        {'blur.glsl': s['blur.glsl'].replace('textureLod(iChannel0, ', 'texture(iChannel0, ')
+                                    .replace(' * DS / R, lod);', ' * DS / R);')}))),
 ]
 
 
@@ -233,7 +284,9 @@ def main():
             print('  ✗ ' + b)
         if not bad and n < 6:
             print('  ✓ объявление верно')
-    print('=== 7. отрицательные контроли ' + '=' * 62)
+        if not bad and n == 7:
+            print('  ✓ каждое поле правил в образце есть')
+    print('=== 8. отрицательные контроли ' + '=' * 62)
     for name, blk, mut in CONTROLS:
         if blk == 5 and not os.path.isfile(os.environ.get('GLSLANG') or ''):
             print('  - %-30s блок 6 не работал: нет GLSLANG' % name)
@@ -244,7 +297,7 @@ def main():
         print('  %s %-30s блок %d: %s' % ('✓' if got else '✗', name, blk + 1,
                                          got[0][:60] if got else 'не пойман'))
         if not got:
-            BAD.append('блок 7: контроль «%s» не пойман' % name)
+            BAD.append('блок 8: контроль «%s» не пойман' % name)
     print('\nНАРУШЕНИЙ: %d' % len(BAD) if BAD else '\nВСЁ ЧИСТО')
     return 1 if BAD else 0
 
