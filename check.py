@@ -33,6 +33,7 @@ FORMATS = ('rgba8', 'rgba16f', 'rgba32f')
 WRAPS = ('clamp', 'repeat', 'mirror')
 ID = re.compile(r'[a-z][a-z0-9_]*\Z')
 IDENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*\Z')
+PRESET_DEPTH = 3             # частей в имени набора: «demo/wide grid» — две (§7.3)
 MAIN_IMAGE = re.compile(r'\bvoid\s+mainImage\s*\(\s*out\s+vec4\s+\w+\s*,'
                         r'\s*(?:in\s+)?vec2\s+\w+\s*\)')
 RULES = ('файл', 'ключ', 'формат', 'имя', 'путь', 'вход', 'картинка', 'буфер', 'пасс', 'вкладка',
@@ -568,18 +569,29 @@ class Review:
             if full is not None:
                 self.bad('E', 'manifest.json presets', 'путь', 'presets — папка')
             return
-        for fn in sorted(os.listdir(full)):
-            rel = man['presets'] + '/' + fn
-            if not fn.endswith('.txt'):
-                self.bad('W', rel, 'набор', 'набор — файл <имя>.txt; этот хосты не прочтут')
-                continue
-            try:
-                text = io.open(os.path.join(full, fn), encoding='utf-8-sig').read()
-            except (OSError, UnicodeDecodeError) as ex:
-                self.bad('E', rel, 'набор', 'не прочесть как UTF-8: %s' % ex)
-                continue
-            for lvl, nm, txt in values.check_line(values.unwrap_file(text), self.kj):
-                self.bad(lvl, '%s %s' % (rel, nm), 'набор', txt)
+        # обход рекурсивный: плоский listdir молча пропустил бы набор в подпапке (§7.3)
+        for dp, dn, fn_ in os.walk(full):
+            dn.sort()
+            for fn in sorted(fn_):
+                self.preset(man['presets'], full, os.path.join(dp, fn))
+
+    def preset(self, folder, full, path):
+        name = os.path.relpath(path, full).replace(os.sep, '/')
+        rel = folder + '/' + name
+        if not name.endswith('.txt'):
+            self.bad('W', rel, 'набор', 'набор — файл <имя>.txt; этот хосты не прочтут')
+            return
+        if name.count('/') + 1 > PRESET_DEPTH:
+            self.bad('E', rel, 'набор', 'имя набора «%s» — больше %d частей: хосты его не покажут'
+                     % (name[:-4], PRESET_DEPTH))
+            return
+        try:
+            text = io.open(path, encoding='utf-8-sig').read()
+        except (OSError, UnicodeDecodeError) as ex:
+            self.bad('E', rel, 'набор', 'не прочесть как UTF-8: %s' % ex)
+            return
+        for lvl, nm, txt in values.check_line(values.unwrap_file(text), self.kj):
+            self.bad(lvl, '%s %s' % (rel, nm), 'набор', txt)
 
 
 def review(folder):

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """ПРОВЕРКА ПАКЕТА НА ОБРАЗЦЕ И НА ПОДСАЖЕННЫХ ОШИБКАХ — check.py, 6 блоков.
 
-  1 образец sample/ — ни ошибки, ни предупреждения;
+  1 образец sample/ — ни ошибки, ни предупреждения; и с набором в подпапке на предельной глубине;
   2 отрицательные контроли: каждая подсаженная ошибка названа ЕЁ правилом и в ЕЁ месте, а каждое
     правило check.RULES и knobs_rules.RULES покрыто хотя бы одной (покрытие считается, а не
     обещается). Контроль, уронивший проверку исключением или жалобой «разбор», — провал;
@@ -84,6 +84,12 @@ def review(edit):
 def _del(d, *ks):
     for k in ks:
         del d[k]
+
+
+def deep_preset(p, rel, line):
+    """Набор в подпапке пакета-копии: подпапки создаются."""
+    os.makedirs(os.path.dirname(p.path(rel)), exist_ok=True)
+    p.write(rel, '# набор в подпапке\n' + line + '\n')
 
 
 # (имя, правка, правило, кусок «где») — правило и место той ошибки, которую подсадили
@@ -184,6 +190,10 @@ M = [
     ('набор: значение не той формы',
      lambda p: p.sub('presets/pulse.txt', 'BLUR=3', 'BLUR=abc'), 'набор',
      'presets/pulse.txt BLUR'),
+    ('набор в подпапке: значение не той формы',
+     lambda p: deep_preset(p, 'presets/a/b/c.txt', 'BLUR=abc'), 'набор', 'presets/a/b/c.txt BLUR'),
+    ('набор глубже трёх частей',
+     lambda p: deep_preset(p, 'presets/a/b/c/d.txt', 'BLUR=3'), 'набор', 'presets/a/b/c/d.txt'),
     ('knobs.json — не объект', lambda p: p.write('knobs.json', '[]'), 'файл', 'knobs.json'),
     ('незнакомое поле ручки',
      lambda p: p.kj(lambda d: knob(d, 'RADIUS').update(defualt=0.2)), 'поле',
@@ -243,6 +253,11 @@ def block1():
     must(not ps, 'образец дал %d жалоб' % len(ps))
     if not ps:
         print('  образец sample/: ошибок 0, предупреждений 0')
+    # законная подпапка на предельной глубине (§7.3): ни жалобы на имя, и строка проверена
+    ps = review(lambda p: deep_preset(p, 'presets/demo/wide/grid.txt', 'BLUR=3 COLS=4'))
+    must(not ps, 'набор presets/demo/wide/grid.txt (три части) дал жалобы: %s' % ps[:2])
+    if not ps:
+        print('  набор в подпапке на глубине три: ошибок 0, предупреждений 0')
 
 
 def block2():

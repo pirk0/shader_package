@@ -40,7 +40,7 @@ TouchDesigner, стендов, — чтобы хосты не знали про�
 
 ```
 python tests/vectors_check.py    # язык на векторах; подмножество GLSL (GLSLANG=); 10 контролей
-python tests/check_selftest.py   # проверка пакета: образец чист, 60 подсаженных ошибок, битый вход
+python tests/check_selftest.py   # проверка пакета: образец чист, 62 подсаженных ошибки, битый вход
 python tests/sample_check.py     # правда объявлений образца; сборка вкладок (GLSLANG=)
 ```
 
